@@ -12,22 +12,6 @@
             font-family: 'Inter', sans-serif;
             background-color: #f0f2f5; /* Light gray background */
         }
-        .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            border-left-color: #3b82f6; /* Blue-600 */
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            vertical-align: middle;
-            margin-right: 8px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen p-4">
@@ -97,23 +81,9 @@
             Determine Admission
         </button>
 
-        <!-- LLM-powered Detailed Assessment Button -->
-        <button id="detailedAssessmentBtn"
-                class="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-md shadow-md transition duration-300 ease-in-out transform hover:scale-105 flex items-center justify-center">
-            <span id="assessmentBtnText">✨ Detailed Assessment</span>
-            <div id="assessmentSpinner" class="spinner hidden"></div>
-        </button>
-
-
         <!-- Result Display Area -->
         <div id="result" class="mt-6 p-4 rounded-md text-center text-lg font-semibold bg-gray-100 text-gray-800 hidden">
             <!-- Result will be displayed here -->
-        </div>
-
-        <!-- Detailed Assessment Display Area -->
-        <div id="detailedAssessment" class="mt-6 p-4 rounded-md bg-purple-100 text-gray-800 hidden">
-            <h2 class="text-xl font-bold mb-2">Detailed Assessment:</h2>
-            <p id="assessmentContent" class="whitespace-pre-wrap"></p>
         </div>
 
         <!-- Simple Modal for messages -->
@@ -135,12 +105,7 @@
         const heartRateInput = document.getElementById('heartRate');
         const oxygenSaturationInput = document.getElementById('oxygenSaturation');
         const determineAdmissionBtn = document.getElementById('determineAdmissionBtn');
-        const detailedAssessmentBtn = document.getElementById('detailedAssessmentBtn');
-        const assessmentBtnText = document.getElementById('assessmentBtnText');
-        const assessmentSpinner = document.getElementById('assessmentSpinner');
         const resultDisplay = document.getElementById('result');
-        const detailedAssessmentDisplay = document.getElementById('detailedAssessment');
-        const assessmentContent = document.getElementById('assessmentContent');
         const messageModal = document.getElementById('messageModal');
         const modalMessage = document.getElementById('modalMessage');
         const closeModalBtn = document.getElementById('closeModalBtn');
@@ -265,8 +230,7 @@
             // If any validation fails, stop execution
             if (!isRrValid || !isSbpValid || !isDbpValid || !isHrValid || !isSpo2Valid) {
                 resultDisplay.classList.add('hidden'); // Hide result if inputs are invalid
-                detailedAssessmentDisplay.classList.add('hidden'); // Hide detailed assessment too
-                showMessage("Please correct the invalid input values before determining admission or generating a detailed assessment.");
+                showMessage("Please correct the invalid input values.");
                 return;
             }
 
@@ -283,104 +247,6 @@
             // Display the result
             resultDisplay.textContent = admissionStatus;
             resultDisplay.classList.remove('hidden'); // Show the result div
-
-            // Hide detailed assessment when basic admission is determined
-            detailedAssessmentDisplay.classList.add('hidden');
-        });
-
-        // Event listener for the "Detailed Assessment" button
-        detailedAssessmentBtn.addEventListener('click', async () => {
-            clearErrors(); // Clear previous errors
-
-            // Validate all inputs
-            const isRrValid = validateInput(respiratoryRateInput, respiratoryRateError, 'Respiratory Rate', 0, 100);
-            const isSbpValid = validateInput(systolicBPInput, systolicBPError, 'Systolic Blood Pressure', 0, 250);
-            const isDbpValid = validateInput(diastolicBPInput, diastolicBPError, 'Diastolic Blood Pressure', 0, 150);
-            const isHrValid = validateInput(heartRateInput, heartRateError, 'Heart Rate', 0, 200);
-            const isSpo2Valid = validateInput(oxygenSaturationInput, oxygenSaturationError, 'Oxygen Saturation', 0, 100);
-
-            // If any validation fails, stop execution
-            if (!isRrValid || !isSbpValid || !isDbpValid || !isHrValid || !isSpo2Valid) {
-                resultDisplay.classList.add('hidden');
-                detailedAssessmentDisplay.classList.add('hidden');
-                showMessage("Please correct the invalid input values before generating a detailed assessment.");
-                return;
-            }
-
-            // Get numerical values from inputs
-            const rr = parseFloat(respiratoryRateInput.value);
-            const sbp = parseFloat(systolicBPInput.value);
-            const dbp = parseFloat(diastolicBPInput.value);
-            const hr = parseFloat(heartRateInput.value);
-            const spo2 = parseFloat(oxygenSaturationInput.value);
-
-            // Show loading spinner and disable button
-            assessmentBtnText.textContent = 'Generating...';
-            assessmentSpinner.classList.remove('hidden');
-            detailedAssessmentBtn.disabled = true;
-            detailedAssessmentDisplay.classList.add('hidden'); // Hide previous assessment
-
-            try {
-                // Construct the prompt for the Gemini API
-                const prompt = `Based on the following physiological parameters, provide a concise medical assessment and suggest potential next steps or considerations. This is for a demo application and not for actual medical diagnosis.
-
-                Parameters:
-                - Respiratory Rate: ${rr} breaths per minute
-                - Systolic Blood Pressure: ${sbp} mmHg
-                - Diastolic Blood Pressure: ${dbp} mmHg
-                - Heart Rate: ${hr} bpm
-                - Oxygen Saturation: ${spo2}%
-
-                Consider the following general (non-medical) ranges for context:
-                - Respiratory Rate: 12-20 breaths/min
-                - Systolic BP: 90-120 mmHg
-                - Diastolic BP: 60-80 mmHg
-                - Heart Rate: 60-100 bpm
-                - Oxygen Saturation: 95-100%
-
-                Please provide an assessment and next steps. Keep the response to a maximum of 200 words.`;
-
-                let chatHistory = [];
-                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
-                const payload = { contents: chatHistory };
-                const apiKey = ""; // API key is handled by Canvas runtime
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    console.error('API Error:', errorData);
-                    throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorData.error.message}`);
-                }
-
-                const result = await response.json();
-
-                if (result.candidates && result.candidates.length > 0 &&
-                    result.candidates[0].content && result.candidates[0].content.parts &&
-                    result.candidates[0].content.parts.length > 0) {
-                    const text = result.candidates[0].content.parts[0].text;
-                    assessmentContent.textContent = text;
-                    detailedAssessmentDisplay.classList.remove('hidden'); // Show the detailed assessment div
-                    resultDisplay.classList.add('hidden'); // Hide basic result when detailed assessment is shown
-                } else {
-                    console.warn("Unexpected API response structure:", result);
-                    showMessage("Could not generate a detailed assessment. Please try again.");
-                }
-
-            } catch (error) {
-                console.error("Error generating detailed assessment:", error);
-                showMessage(`Error: ${error.message || 'Failed to get assessment from AI. Please try again.'}`);
-            } finally {
-                // Hide loading spinner and enable button
-                assessmentBtnText.textContent = '✨ Detailed Assessment';
-                assessmentSpinner.classList.add('hidden');
-                detailedAssessmentBtn.disabled = false;
-            }
         });
     </script>
 </body>
