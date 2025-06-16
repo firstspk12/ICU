@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICU Admission Predictor</title>
+    <!-- Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font import */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5; /* Light gray background */
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #3b82f6; /* Blue-600 */
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">ICU Admission Predictor</h1>
+
+        <div class="space-y-4">
+            <!-- Respiratory Rate Input -->
+            <div>
+                <label for="respiratoryRate" class="block text-gray-700 text-sm font-medium mb-1">
+                    Respiratory Rate (breaths/min)
+                </label>
+                <input type="number" id="respiratoryRate"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="e.g., 22" min="0" step="1">
+                <p id="respiratoryRateError" class="text-red-600 text-xs mt-1 hidden"></p>
+            </div>
+
+            <!-- Systolic Blood Pressure Input -->
+            <div>
+                <label for="systolicBP" class="block text-gray-700 text-sm font-medium mb-1">
+                    Systolic Blood Pressure (mmHg)
+                </label>
+                <input type="number" id="systolicBP"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="e.g., 90" min="0" step="1">
+                <p id="systolicBPError" class="text-red-600 text-xs mt-1 hidden"></p>
+            </div>
+
+            <!-- Diastolic Blood Pressure Input -->
+            <div>
+                <label for="diastolicBP" class="block text-gray-700 text-sm font-medium mb-1">
+                    Diastolic Blood Pressure (mmHg)
+                </label>
+                <input type="number" id="diastolicBP"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="e.g., 60" min="0" step="1">
+                <p id="diastolicBPError" class="text-red-600 text-xs mt-1 hidden"></p>
+            </div>
+
+            <!-- Heart Rate Input -->
+            <div>
+                <label for="heartRate" class="block text-gray-700 text-sm font-medium mb-1">
+                    Heart Rate (bpm)
+                </label>
+                <input type="number" id="heartRate"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="e.g., 110" min="0" step="1">
+                <p id="heartRateError" class="text-red-600 text-xs mt-1 hidden"></p>
+            </div>
+
+            <!-- Oxygen Saturation Input -->
+            <div>
+                <label for="oxygenSaturation" class="block text-gray-700 text-sm font-medium mb-1">
+                    Oxygen Saturation (%)
+                </label>
+                <input type="number" id="oxygenSaturation"
+                       class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="e.g., 90" min="0" max="100" step="0.1">
+                <p id="oxygenSaturationError" class="text-red-600 text-xs mt-1 hidden"></p>
+            </div>
+        </div>
+
+        <!-- Determine Admission Button -->
+        <button id="determineAdmissionBtn"
+                class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-md shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+            Determine Admission
+        </button>
+
+        <!-- LLM-powered Detailed Assessment Button -->
+        <button id="detailedAssessmentBtn"
+                class="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-md shadow-md transition duration-300 ease-in-out transform hover:scale-105 flex items-center justify-center">
+            <span id="assessmentBtnText">✨ Detailed Assessment</span>
+            <div id="assessmentSpinner" class="spinner hidden"></div>
+        </button>
+
+
+        <!-- Result Display Area -->
+        <div id="result" class="mt-6 p-4 rounded-md text-center text-lg font-semibold bg-gray-100 text-gray-800 hidden">
+            <!-- Result will be displayed here -->
+        </div>
+
+        <!-- Detailed Assessment Display Area -->
+        <div id="detailedAssessment" class="mt-6 p-4 rounded-md bg-purple-100 text-gray-800 hidden">
+            <h2 class="text-xl font-bold mb-2">Detailed Assessment:</h2>
+            <p id="assessmentContent" class="whitespace-pre-wrap"></p>
+        </div>
+
+        <!-- Simple Modal for messages -->
+        <div id="messageModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden">
+            <div class="bg-white p-6 rounded-lg shadow-xl w-80 text-center">
+                <p id="modalMessage" class="text-gray-800 text-lg mb-4"></p>
+                <button id="closeModalBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get references to DOM elements
+        const respiratoryRateInput = document.getElementById('respiratoryRate');
+        const systolicBPInput = document.getElementById('systolicBP');
+        const diastolicBPInput = document.getElementById('diastolicBP');
+        const heartRateInput = document.getElementById('heartRate');
+        const oxygenSaturationInput = document.getElementById('oxygenSaturation');
+        const determineAdmissionBtn = document.getElementById('determineAdmissionBtn');
+        const detailedAssessmentBtn = document.getElementById('detailedAssessmentBtn');
+        const assessmentBtnText = document.getElementById('assessmentBtnText');
+        const assessmentSpinner = document.getElementById('assessmentSpinner');
+        const resultDisplay = document.getElementById('result');
+        const detailedAssessmentDisplay = document.getElementById('detailedAssessment');
+        const assessmentContent = document.getElementById('assessmentContent');
+        const messageModal = document.getElementById('messageModal');
+        const modalMessage = document.getElementById('modalMessage');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+
+        // Get references to error message paragraphs
+        const respiratoryRateError = document.getElementById('respiratoryRateError');
+        const systolicBPError = document.getElementById('systolicBPError');
+        const diastolicBPError = document.getElementById('diastolicBPError');
+        const heartRateError = document.getElementById('heartRateError');
+        const oxygenSaturationError = document.getElementById('oxygenSaturationError');
+
+        /**
+         * Shows a custom modal message.
+         * @param {string} message - The message to display.
+         */
+        function showMessage(message) {
+            modalMessage.textContent = message;
+            messageModal.classList.remove('hidden');
+        }
+
+        /**
+         * Hides the custom modal message.
+         */
+        function hideMessage() {
+            messageModal.classList.add('hidden');
+        }
+
+        // Event listener for the close modal button
+        closeModalBtn.addEventListener('click', hideMessage);
+
+        /**
+         * Clears all error messages.
+         */
+        function clearErrors() {
+            respiratoryRateError.classList.add('hidden');
+            systolicBPError.classList.add('hidden');
+            diastolicBPError.classList.add('hidden');
+            heartRateError.classList.add('hidden');
+            oxygenSaturationError.classList.add('hidden');
+        }
+
+        /**
+         * Validates a single input field.
+         * @param {HTMLInputElement} inputElement - The input element to validate.
+         * @param {HTMLElement} errorElement - The corresponding error message element.
+         * @param {string} fieldName - The name of the field for error messages.
+         * @param {number} [min] - Optional minimum value.
+         * @param {number} [max] - Optional maximum value.
+         * @returns {boolean} True if valid, false otherwise.
+         */
+        function validateInput(inputElement, errorElement, fieldName, min = -Infinity, max = Infinity) {
+            const value = parseFloat(inputElement.value);
+            errorElement.classList.add('hidden'); // Hide previous error
+
+            if (inputElement.value.trim() === '') {
+                errorElement.textContent = `${fieldName} cannot be empty.`;
+                errorElement.classList.remove('hidden');
+                return false;
+            }
+            if (isNaN(value)) {
+                errorElement.textContent = `${fieldName} must be a number.`;
+                errorElement.classList.remove('hidden');
+                return false;
+            }
+            if (value < min || value > max) {
+                errorElement.textContent = `${fieldName} must be between ${min} and ${max}.`;
+                errorElement.classList.remove('hidden');
+                return false;
+            }
+            return true;
+        }
+
+        /**
+         * Determines if a patient should be admitted to the ICU based on physiological parameters.
+         * This is a simplified demo logic and does not represent actual medical advice.
+         *
+         * @param {number} rr - Respiratory rate (breaths per minute).
+         * @param {number} sbp - Systolic blood pressure (mmHg).
+         * @param {number} dbp - Diastolic blood pressure (mmHg).
+         * @param {number} hr - Heart rate (bpm).
+         * @param {number} spo2 - Oxygen saturation (%).
+         * @returns {string} The admission recommendation.
+         */
+        function determineICUAdmission(rr, sbp, dbp, hr, spo2) {
+            let reasonsForAdmission = [];
+
+            // Example thresholds (these are illustrative and not medical guidelines)
+            if (rr < 10 || rr > 25) { // Normal RR: 12-20
+                reasonsForAdmission.push("Abnormal Respiratory Rate (outside 10-25 breaths/min)");
+            }
+            if (sbp < 90 || sbp > 180) { // Normal SBP: 90-120 (for general adults)
+                reasonsForAdmission.push("Abnormal Systolic Blood Pressure (outside 90-180 mmHg)");
+            }
+            if (dbp < 60 || dbp > 110) { // Normal DBP: 60-80
+                reasonsForAdmission.push("Abnormal Diastolic Blood Pressure (outside 60-110 mmHg)");
+            }
+            if (hr < 50 || hr > 120) { // Normal HR: 60-100
+                reasonsForAdmission.push("Abnormal Heart Rate (outside 50-120 bpm)");
+            }
+            if (spo2 < 92) { // Normal SpO2: 95-100%
+                reasonsForAdmission.push("Low Oxygen Saturation (below 92%)");
+            }
+
+            if (reasonsForAdmission.length > 0) {
+                return `Admission Recommended. Reasons: ${reasonsForAdmission.join(', ')}.`;
+            } else {
+                return "Admission Not Recommended based on current parameters.";
+            }
+        }
+
+        // Event listener for the "Determine Admission" button
+        determineAdmissionBtn.addEventListener('click', () => {
+            clearErrors(); // Clear previous errors
+
+            // Validate all inputs
+            const isRrValid = validateInput(respiratoryRateInput, respiratoryRateError, 'Respiratory Rate', 0, 100); // Max 100 is generous
+            const isSbpValid = validateInput(systolicBPInput, systolicBPError, 'Systolic Blood Pressure', 0, 250);
+            const isDbpValid = validateInput(diastolicBPInput, diastolicBPError, 'Diastolic Blood Pressure', 0, 150);
+            const isHrValid = validateInput(heartRateInput, heartRateError, 'Heart Rate', 0, 200);
+            const isSpo2Valid = validateInput(oxygenSaturationInput, oxygenSaturationError, 'Oxygen Saturation', 0, 100);
+
+            // If any validation fails, stop execution
+            if (!isRrValid || !isSbpValid || !isDbpValid || !isHrValid || !isSpo2Valid) {
+                resultDisplay.classList.add('hidden'); // Hide result if inputs are invalid
+                detailedAssessmentDisplay.classList.add('hidden'); // Hide detailed assessment too
+                showMessage("Please correct the invalid input values before determining admission or generating a detailed assessment.");
+                return;
+            }
+
+            // Get numerical values from inputs
+            const rr = parseFloat(respiratoryRateInput.value);
+            const sbp = parseFloat(systolicBPInput.value);
+            const dbp = parseFloat(diastolicBPInput.value);
+            const hr = parseFloat(heartRateInput.value);
+            const spo2 = parseFloat(oxygenSaturationInput.value);
+
+            // Determine admission status
+            const admissionStatus = determineICUAdmission(rr, sbp, dbp, hr, spo2);
+
+            // Display the result
+            resultDisplay.textContent = admissionStatus;
+            resultDisplay.classList.remove('hidden'); // Show the result div
+
+            // Hide detailed assessment when basic admission is determined
+            detailedAssessmentDisplay.classList.add('hidden');
+        });
+
+        // Event listener for the "Detailed Assessment" button
+        detailedAssessmentBtn.addEventListener('click', async () => {
+            clearErrors(); // Clear previous errors
+
+            // Validate all inputs
+            const isRrValid = validateInput(respiratoryRateInput, respiratoryRateError, 'Respiratory Rate', 0, 100);
+            const isSbpValid = validateInput(systolicBPInput, systolicBPError, 'Systolic Blood Pressure', 0, 250);
+            const isDbpValid = validateInput(diastolicBPInput, diastolicBPError, 'Diastolic Blood Pressure', 0, 150);
+            const isHrValid = validateInput(heartRateInput, heartRateError, 'Heart Rate', 0, 200);
+            const isSpo2Valid = validateInput(oxygenSaturationInput, oxygenSaturationError, 'Oxygen Saturation', 0, 100);
+
+            // If any validation fails, stop execution
+            if (!isRrValid || !isSbpValid || !isDbpValid || !isHrValid || !isSpo2Valid) {
+                resultDisplay.classList.add('hidden');
+                detailedAssessmentDisplay.classList.add('hidden');
+                showMessage("Please correct the invalid input values before generating a detailed assessment.");
+                return;
+            }
+
+            // Get numerical values from inputs
+            const rr = parseFloat(respiratoryRateInput.value);
+            const sbp = parseFloat(systolicBPInput.value);
+            const dbp = parseFloat(diastolicBPInput.value);
+            const hr = parseFloat(heartRateInput.value);
+            const spo2 = parseFloat(oxygenSaturationInput.value);
+
+            // Show loading spinner and disable button
+            assessmentBtnText.textContent = 'Generating...';
+            assessmentSpinner.classList.remove('hidden');
+            detailedAssessmentBtn.disabled = true;
+            detailedAssessmentDisplay.classList.add('hidden'); // Hide previous assessment
+
+            try {
+                // Construct the prompt for the Gemini API
+                const prompt = `Based on the following physiological parameters, provide a concise medical assessment and suggest potential next steps or considerations. This is for a demo application and not for actual medical diagnosis.
+
+                Parameters:
+                - Respiratory Rate: ${rr} breaths per minute
+                - Systolic Blood Pressure: ${sbp} mmHg
+                - Diastolic Blood Pressure: ${dbp} mmHg
+                - Heart Rate: ${hr} bpm
+                - Oxygen Saturation: ${spo2}%
+
+                Consider the following general (non-medical) ranges for context:
+                - Respiratory Rate: 12-20 breaths/min
+                - Systolic BP: 90-120 mmHg
+                - Diastolic BP: 60-80 mmHg
+                - Heart Rate: 60-100 bpm
+                - Oxygen Saturation: 95-100%
+
+                Please provide an assessment and next steps. Keep the response to a maximum of 200 words.`;
+
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                const payload = { contents: chatHistory };
+                const apiKey = ""; // API key is handled by Canvas runtime
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('API Error:', errorData);
+                    throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorData.error.message}`);
+                }
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    assessmentContent.textContent = text;
+                    detailedAssessmentDisplay.classList.remove('hidden'); // Show the detailed assessment div
+                    resultDisplay.classList.add('hidden'); // Hide basic result when detailed assessment is shown
+                } else {
+                    console.warn("Unexpected API response structure:", result);
+                    showMessage("Could not generate a detailed assessment. Please try again.");
+                }
+
+            } catch (error) {
+                console.error("Error generating detailed assessment:", error);
+                showMessage(`Error: ${error.message || 'Failed to get assessment from AI. Please try again.'}`);
+            } finally {
+                // Hide loading spinner and enable button
+                assessmentBtnText.textContent = '✨ Detailed Assessment';
+                assessmentSpinner.classList.add('hidden');
+                detailedAssessmentBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
